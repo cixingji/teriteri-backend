@@ -1,0 +1,39 @@
+# Keep this file free of real credentials. Copy the values to an external
+# application.properties file or provide the equivalent environment variables.
+
+ai.video-summary.enabled=false
+ai.video-summary.version=v1
+ai.video-summary.work-dir=./public/video-summary
+# Leave blank to use the 64-bit FFmpeg bundled by jave-all-deps.
+ai.video-summary.ffmpeg-path=
+ai.video-summary.extract-timeout-seconds=900
+ai.video-summary.stage-timeout-seconds=1800
+ai.video-summary.max-retries=3
+ai.video-summary.poll-initial-delay-seconds=20
+ai.video-summary.poll-max-delay-seconds=120
+ai.video-summary.poll-scan-delay-ms=10000
+ai.video-summary.poll-batch-size=10
+ai.video-summary.max-chunk-chars=6000
+
+# Optional. When omitted, durable polling still completes ASR tasks.
+ai.video-summary.callback-base-url=
+ai.video-summary.callback-token=
+
+ai.video-summary.media-core-pool-size=2
+ai.video-summary.media-max-pool-size=2
+ai.video-summary.media-queue-capacity=20
+ai.video-summary.remote-core-pool-size=4
+ai.video-summary.remote-max-pool-size=8
+ai.video-summary.remote-queue-capacity=100
+
+ai.video-summary.xfyun.app-id=
+ai.video-summary.xfyun.secret-key=
+ai.video-summary.xfyun.language=cn
+ai.video-summary.xfyun.upload-url=https://raasr.xfyun.cn/v2/api/upload
+ai.video-summary.xfyun.result-url=https://raasr.xfyun.cn/v2/api/getResult
+
+ai.video-summary.spark.api-password=
+ai.video-summary.spark.endpoint=https://spark-api-open.xf-yun.com/v1/chat/completions
+ai.video-summary.spark.model=lite
+ai.video-summary.spark.max-tokens=2048
+ai.video-summary.spark.temperature=0.2

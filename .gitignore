@@ -35,6 +35,11 @@ build/
 ### config ###
 *.yml
 
+# Local secrets and runtime files
+/src/main/resources/Video.key
+/src/main/resources/Video.info
+/log.log
+
 ### upload-dir ###
 /public/chunk/
 /public/img/cover/
