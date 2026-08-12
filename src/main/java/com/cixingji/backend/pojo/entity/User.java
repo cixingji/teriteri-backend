@@ -71,6 +71,15 @@ public class User implements Serializable {
     @Column(name="delete_date") // 数据库字段名是 delete_date
     private Date deleteDate;
 
+    @Column(name="github_id")
+    private String githubId;
+
+    @Column(name="github_login")
+    private String githubLogin;
+
+    @Column(name="password_initialized")
+    private Integer passwordInitialized;
+
 
     @Override
     public String toString() {

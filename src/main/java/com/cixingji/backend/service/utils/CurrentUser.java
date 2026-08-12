@@ -6,6 +6,7 @@ import com.cixingji.backend.service.impl.user.UserDetailsImpl;
 import com.cixingji.backend.utils.RedisUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
@@ -28,6 +29,14 @@ public class CurrentUser {
         UserDetailsImpl loginUser = (UserDetailsImpl) authenticationToken.getPrincipal();
         User suser = loginUser.getUser();   // 这里的user是登录时存的security:user，因为是静态数据，可能会跟实际的有区别，所以只能用作获取uid用
         return suser.getUid();
+    }
+
+    public String getSessionId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getDetails() == null) {
+            return null;
+        }
+        return String.valueOf(authentication.getDetails());
     }
 
     /**

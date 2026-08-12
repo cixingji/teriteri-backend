@@ -219,10 +219,14 @@ CREATE TABLE `user` (
   `auth_msg` varchar(30) DEFAULT NULL COMMENT '认证说明',
   `create_date` datetime NOT NULL COMMENT '创建时间',
   `delete_date` datetime DEFAULT NULL COMMENT '注销时间',
+  `github_id` varchar(64) DEFAULT NULL COMMENT 'GitHub user id',
+  `github_login` varchar(255) DEFAULT NULL COMMENT 'GitHub login name',
+  `password_initialized` tinyint(1) NOT NULL DEFAULT '1' COMMENT 'Whether a local password is configured',
   PRIMARY KEY (`uid`),
   UNIQUE KEY `uid` (`uid`),
   UNIQUE KEY `username` (`username`),
-  UNIQUE KEY `nickname` (`nickname`)
+  UNIQUE KEY `nickname` (`nickname`),
+  UNIQUE KEY `uk_user_github_id` (`github_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=0 DEFAULT CHARSET=utf8 COMMENT='用户表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 

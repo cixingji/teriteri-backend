@@ -3,10 +3,12 @@ package com.cixingji.backend.component.danmu;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.cixingji.backend.mapper.DanmuMapper;
+import com.cixingji.backend.mapper.UserMapper;
+import com.cixingji.backend.pojo.dto.auth.AuthSession;
 import com.cixingji.backend.pojo.entity.Danmu;
 import com.cixingji.backend.pojo.entity.User;
+import com.cixingji.backend.service.auth.AuthSessionService;
 import com.cixingji.backend.service.video.VideoStatsService;
-import com.cixingji.backend.utils.JwtUtil;
 import com.cixingji.backend.utils.RedisUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,14 +30,18 @@ import java.util.concurrent.ConcurrentHashMap;
 public class DanmuWebSocketServer {
 
     // 由于每个连接都不是共享一个WebSocketServer，所以要静态注入
-    private static JwtUtil jwtUtil;
+    private static AuthSessionService authSessionService;
+    private static UserMapper userMapper;
     private static RedisUtil redisUtil;
     private static DanmuMapper danmuMapper;
     private static VideoStatsService videoStatsService;
 
     @Autowired
-    public void setDependencies(JwtUtil jwtUtil, RedisUtil redisUtil, DanmuMapper danmuMapper, VideoStatsService videoStatsService) {
-        DanmuWebSocketServer.jwtUtil = jwtUtil;
+    public void setDependencies(AuthSessionService authSessionService, UserMapper userMapper,
+                                RedisUtil redisUtil, DanmuMapper danmuMapper,
+                                VideoStatsService videoStatsService) {
+        DanmuWebSocketServer.authSessionService = authSessionService;
+        DanmuWebSocketServer.userMapper = userMapper;
         DanmuWebSocketServer.redisUtil = redisUtil;
         DanmuWebSocketServer.danmuMapper = danmuMapper;
         DanmuWebSocketServer.videoStatsService = videoStatsService;
@@ -80,15 +86,13 @@ public class DanmuWebSocketServer {
                 return;
             }
             token = token.substring(7);
-            boolean verifyToken = jwtUtil.verifyToken(token);
-            if (!verifyToken) {
+            AuthSession authSession = authSessionService.validateAccessToken(token);
+            if (authSession == null) {
                 session.getBasicRemote().sendText("登录已过期");
                 return;
             }
-            String userId = JwtUtil.getSubjectFromToken(token);
-            String role = JwtUtil.getClaimFromToken(token, "role");
-            User user = redisUtil.getObject("security:" + role + ":" + userId, User.class);
-            if (user == null) {
+            User user = userMapper.selectById(authSession.getUserId());
+            if (user == null || !Integer.valueOf(0).equals(user.getState())) {
                 session.getBasicRemote().sendText("登录已过期");
                 return;
             }

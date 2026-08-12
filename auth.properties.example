@@ -1,0 +1,16 @@
+# Copy the required values into Windows environment variables. Do not commit real secrets.
+# PowerShell examples:
+#   $env:AUTH_JWT_SECRET = '<at-least-32-random-characters>'
+#   $env:GITHUB_OAUTH_CLIENT_ID = '<github-oauth-client-id>'
+#   $env:GITHUB_OAUTH_CLIENT_SECRET = '<github-oauth-client-secret>'
+
+auth.jwt.secret=${AUTH_JWT_SECRET:}
+auth.jwt.issuer=cixingji-teriteri
+auth.jwt.audience=teriteri-web
+auth.session.max-devices=10
+auth.cookie.secure=false
+
+justauth.type.github.client-id=${GITHUB_OAUTH_CLIENT_ID:}
+justauth.type.github.client-secret=${GITHUB_OAUTH_CLIENT_SECRET:}
+justauth.type.github.redirect-uri=http://localhost:7070/oauth/callback/github
+justauth.frontend-redirect-uri=http://localhost:8080/oauth/callback

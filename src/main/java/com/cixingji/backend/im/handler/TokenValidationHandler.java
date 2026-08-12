@@ -2,10 +2,12 @@ package com.cixingji.backend.im.handler;
 
 import com.alibaba.fastjson2.JSON;
 import com.cixingji.backend.im.IMServer;
+import com.cixingji.backend.mapper.UserMapper;
+import com.cixingji.backend.pojo.dto.auth.AuthSession;
 import com.cixingji.backend.pojo.entity.Command;
 import com.cixingji.backend.pojo.entity.IMResponse;
 import com.cixingji.backend.pojo.entity.User;
-import com.cixingji.backend.utils.JwtUtil;
+import com.cixingji.backend.service.auth.AuthSessionService;
 import com.cixingji.backend.utils.RedisUtil;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
@@ -24,12 +26,14 @@ import java.util.Set;
 @Component
 public class TokenValidationHandler extends SimpleChannelInboundHandler<TextWebSocketFrame> {
 
-    private static JwtUtil jwtUtil;
+    private static AuthSessionService authSessionService;
+    private static UserMapper userMapper;
     private static RedisUtil redisUtil;
 
     @Autowired
-    public void setDependencies(JwtUtil jwtUtil, RedisUtil redisUtil) {
-        TokenValidationHandler.jwtUtil = jwtUtil;
+    public void setDependencies(AuthSessionService authSessionService, UserMapper userMapper, RedisUtil redisUtil) {
+        TokenValidationHandler.authSessionService = authSessionService;
+        TokenValidationHandler.userMapper = userMapper;
         TokenValidationHandler.redisUtil = redisUtil;
     }
 
@@ -82,16 +86,14 @@ public class TokenValidationHandler extends SimpleChannelInboundHandler<TextWebS
         token = token.substring(7);
 
         // 解析token
-        boolean verifyToken = jwtUtil.verifyToken(token);
-        if (!verifyToken) {
+        AuthSession authSession = authSessionService.validateAccessToken(token);
+        if (authSession == null) {
             log.error("当前token已过期");
             return null;
         }
-        String userId = JwtUtil.getSubjectFromToken(token);
-        String role = JwtUtil.getClaimFromToken(token, "role");
-        User user = redisUtil.getObject("security:" + role + ":" + userId, User.class);
+        User user = userMapper.selectById(authSession.getUserId());
 
-        if (user == null) {
+        if (user == null || !Integer.valueOf(0).equals(user.getState())) {
             log.error("用户未登录");
             return null;
         }

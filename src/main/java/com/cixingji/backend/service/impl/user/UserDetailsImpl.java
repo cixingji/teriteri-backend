@@ -1,24 +1,42 @@
 package com.cixingji.backend.service.impl.user;
 
 import com.cixingji.backend.pojo.entity.User;
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
+import java.util.Collections;
 
 @Data
 @NoArgsConstructor
-@AllArgsConstructor
 public class UserDetailsImpl implements UserDetails {
-    //security体系
+
     private User user;
+    private String scope = "user";
+
+    public UserDetailsImpl(User user) {
+        this(user, "user");
+    }
+
+    public UserDetailsImpl(User user, String scope) {
+        this.user = user;
+        this.scope = scope;
+    }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return null;
+        if ("admin".equals(scope) && user != null) {
+            if (Integer.valueOf(2).equals(user.getRole())) {
+                return Collections.singletonList(new SimpleGrantedAuthority("ROLE_SUPER_ADMIN"));
+            }
+            if (Integer.valueOf(1).equals(user.getRole())) {
+                return Collections.singletonList(new SimpleGrantedAuthority("ROLE_ADMIN"));
+            }
+        }
+        return Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER"));
     }
 
     @Override
@@ -38,7 +56,7 @@ public class UserDetailsImpl implements UserDetails {
 
     @Override
     public boolean isAccountNonLocked() {
-        return true;
+        return user != null && !Integer.valueOf(1).equals(user.getState());
     }
 
     @Override
@@ -48,6 +66,6 @@ public class UserDetailsImpl implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return true;
+        return user != null && Integer.valueOf(0).equals(user.getState());
     }
 }

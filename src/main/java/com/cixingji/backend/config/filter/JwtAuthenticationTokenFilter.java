@@ -1,12 +1,15 @@
 package com.cixingji.backend.config.filter;
 
+import com.cixingji.backend.mapper.UserMapper;
+import com.cixingji.backend.pojo.dto.auth.AuthSession;
+import com.cixingji.backend.pojo.entity.CustomResponse;
 import com.cixingji.backend.pojo.entity.User;
+import com.cixingji.backend.service.auth.AuthSessionService;
 import com.cixingji.backend.service.impl.user.UserDetailsImpl;
-import com.cixingji.backend.utils.JwtUtil;
-import com.cixingji.backend.utils.RedisUtil;
-import lombok.extern.slf4j.Slf4j;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jetbrains.annotations.NotNull;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -18,67 +21,75 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 @Component
-@Slf4j
 public class JwtAuthenticationTokenFilter extends OncePerRequestFilter {
 
-    @Autowired
-    private JwtUtil jwtUtil;
+    private final AuthSessionService authSessionService;
+    private final UserMapper userMapper;
+    private final ObjectMapper objectMapper;
 
-    @Autowired
-    private RedisUtil redisUtil;
+    public JwtAuthenticationTokenFilter(AuthSessionService authSessionService,
+                                        UserMapper userMapper,
+                                        ObjectMapper objectMapper) {
+        this.authSessionService = authSessionService;
+        this.userMapper = userMapper;
+        this.objectMapper = objectMapper;
+    }
 
-    /**
-     * token 认证过滤器，任何请求访问服务器都会先被这里拦截验证token合法性
-     * @param request
-     * @param response
-     * @param filterChain
-     * @throws ServletException
-     * @throws IOException
-     */
     @Override
-    protected void doFilterInternal(HttpServletRequest request, @NotNull HttpServletResponse response, @NotNull FilterChain filterChain) throws ServletException, IOException {
-        String token = request.getHeader("Authorization");
-
-        if (!StringUtils.hasText(token) || !token.startsWith("Bearer ")) {
-            // 通过开放接口过滤器后，如果没有可解析的token就放行
+    protected void doFilterInternal(HttpServletRequest request,
+                                    @NotNull HttpServletResponse response,
+                                    @NotNull FilterChain filterChain) throws ServletException, IOException {
+        String header = request.getHeader("Authorization");
+        if (!StringUtils.hasText(header) || !header.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        token = token.substring(7);
+        try {
+            String token = header.substring(7);
+            AuthSession session = authSessionService.validateAccessToken(token);
+            if (session == null) {
+                writeError(response, 401, "Authentication required");
+                return;
+            }
+            User user = userMapper.selectById(session.getUserId());
+            if (user == null || Integer.valueOf(2).equals(user.getState())) {
+                authSessionService.revokeAll(session.getUserId());
+                writeError(response, 401, "Account does not exist");
+                return;
+            }
+            if (Integer.valueOf(1).equals(user.getState())) {
+                authSessionService.revokeAll(session.getUserId());
+                writeError(response, 423, "Account is locked");
+                return;
+            }
+            if ("admin".equals(session.getScope()) && Integer.valueOf(0).equals(user.getRole())) {
+                authSessionService.revokeSession(session.getSessionId());
+                writeError(response, 403, "Administrator access required");
+                return;
+            }
 
-        // 解析token
-        boolean verifyToken = jwtUtil.verifyToken(token);
-        if (!verifyToken) {
-//            log.error("当前token已过期");
-            response.addHeader("message", "not login"); // 设置响应头信息，给前端判断用
-            response.setStatus(403);
-//            throw new AuthenticationException("当前token已过期");
-            return;
+            UserDetailsImpl principal = new UserDetailsImpl(user, session.getScope());
+            UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                    principal,
+                    null,
+                    principal.getAuthorities()
+            );
+            authentication.setDetails(session.getSessionId());
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+            filterChain.doFilter(request, response);
+        } catch (DataAccessException e) {
+            writeError(response, 503, "Authentication service is temporarily unavailable");
         }
-        String userId = JwtUtil.getSubjectFromToken(token);
-        String role = JwtUtil.getClaimFromToken(token, "role");
+    }
 
-        // 从redis中获取用户信息
-        User user = redisUtil.getObject("security:" + role + ":" + userId, User.class);
-
-        if (user == null) {
-//            log.error("用户未登录");
-            response.addHeader("message", "not login"); // 设置响应头信息，给前端判断用
-            response.setStatus(403);
-//            throw new AuthenticationException("用户未登录");
-            return;
-        }
-
-        // 存入SecurityContextHolder，这里建议只供读取uid用，其中的状态等非静态数据可能不准，所以建议redis另外存值
-        UserDetailsImpl loginUser = new UserDetailsImpl(user);
-        UsernamePasswordAuthenticationToken authenticationToken =
-                new UsernamePasswordAuthenticationToken(loginUser, null, null);
-        SecurityContextHolder.getContext().setAuthentication(authenticationToken);
-
-        // 放行
-        filterChain.doFilter(request, response);
+    private void writeError(HttpServletResponse response, int status, String message) throws IOException {
+        response.setStatus(status);
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        objectMapper.writeValue(response.getWriter(), new CustomResponse(status, message, null));
     }
 }
