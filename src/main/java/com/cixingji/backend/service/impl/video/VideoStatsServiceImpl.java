@@ -5,6 +5,7 @@ import com.cixingji.backend.mapper.VideoStatsMapper;
 import com.cixingji.backend.pojo.entity.VideoStats;
 import com.cixingji.backend.service.video.VideoStatsService;
 import com.cixingji.backend.utils.RedisUtil;
+import com.cixingji.backend.utils.ESUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -18,6 +19,9 @@ public class VideoStatsServiceImpl implements VideoStatsService {
 
     @Autowired
     private RedisUtil redisUtil;
+
+    @Autowired
+    private ESUtil esUtil;
 
     @Autowired
     @Qualifier("taskExecutor")
@@ -65,6 +69,7 @@ public class VideoStatsServiceImpl implements VideoStatsService {
         }
         videoStatsMapper.update(null, updateWrapper);
         redisUtil.delValue("videoStats:" + vid);
+        esUtil.updateVideoById(vid);
     }
 
     /**
@@ -85,5 +90,6 @@ public class VideoStatsServiceImpl implements VideoStatsService {
         }
         videoStatsMapper.update(null, updateWrapper);
         redisUtil.delValue("videoStats:" + vid);
+        esUtil.updateVideoById(vid);
     }
 }

@@ -1,0 +1,7 @@
+# Search index configuration. The defaults are shown here for Windows development.
+search.index.bootstrap-enabled=true
+search.index.sync-delay-ms=3000
+
+# Keep the Elasticsearch server version and IK plugin version aligned with pom.xml (7.17.16).
+elasticsearch.host=127.0.0.1
+elasticsearch.port=9200
