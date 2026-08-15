@@ -21,4 +21,7 @@ public class ChatDetailed {
     private Integer anotherDel; // 接受者者是否删除
     private Integer withdraw;   // 消息是否被撤回
     private Date time;          // 发送消息的时间
+    private String clientMessageId; // 客户端生成的幂等消息ID
+    private Date deliveredAt;   // 接收方任意设备确认送达的时间
+    private Date readAt;        // 接收方确认已读的时间
 }

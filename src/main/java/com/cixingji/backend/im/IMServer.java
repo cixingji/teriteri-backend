@@ -10,12 +10,14 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
+import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.handler.stream.ChunkedWriteHandler;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 @Component
 public class IMServer {
@@ -23,6 +25,25 @@ public class IMServer {
     // 存储每个用户的全部连接   id--> 所有websocket链接的集合
     
     public static final Map<Integer, Set<Channel>> userChannel = new ConcurrentHashMap<>();
+
+    public static void register(Integer uid, Channel channel) {
+        userChannel.computeIfAbsent(uid, ignored -> ConcurrentHashMap.newKeySet()).add(channel);
+    }
+
+    public static void unregister(Integer uid, Channel channel) {
+        if (uid == null) {
+            return;
+        }
+        userChannel.computeIfPresent(uid, (ignored, channels) -> {
+            channels.remove(channel);
+            return channels.isEmpty() ? null : channels;
+        });
+    }
+
+    public static boolean isOnline(Integer uid) {
+        Set<Channel> channels = userChannel.get(uid);
+        return channels != null && channels.stream().anyMatch(Channel::isActive);
+    }
 
     public void start() throws InterruptedException {
 
@@ -50,6 +71,8 @@ public class IMServer {
                                 .addLast(new TokenValidationHandler())
                                 // 添加 WebSocket 支持
                                 .addLast(new WebSocketServerProtocolHandler("/im"))
+                                // 75秒没有收到任何客户端数据就清理僵尸连接
+                                .addLast(new IdleStateHandler(75, 0, 0, TimeUnit.SECONDS))
                                 .addLast(new WebSocketHandler());
 
                     }

@@ -50,12 +50,12 @@ public interface ChatService {
      * @param from  发消息者UID（对方）
      * @param to    收消息者UID（自己）
      */
-    void updateWhisperOnline(Integer from, Integer to);
+    void updateWhisperOnline(Integer from, Integer to, String deviceId);
 
     /**
      * 更新窗口为离开状态
      * @param from  发消息者UID（对方）
      * @param to    收消息者UID（自己）
      */
-    void updateWhisperOutline(Integer from, Integer to);
+    void updateWhisperOutline(Integer from, Integer to, String deviceId);
 }

@@ -81,9 +81,10 @@ public class ChatController {
      * @param from  对方UID
      */
     @GetMapping("/msg/chat/online")
-    public void updateWhisperOnline(@RequestParam("from") Integer from) {
+    public void updateWhisperOnline(@RequestParam("from") Integer from,
+                                    @RequestParam(value = "deviceId", defaultValue = "legacy") String deviceId) {
         Integer uid = currentUser.getUserId();
-        chatService.updateWhisperOnline(from, uid);
+        chatService.updateWhisperOnline(from, uid, deviceId);
     }
 
     /**
@@ -91,7 +92,9 @@ public class ChatController {
      * @param from  对方UID
      */
     @GetMapping("/msg/chat/outline")
-    public void updateWhisperOutline(@RequestParam("from") Integer from, @RequestParam("to") Integer to) {
-        chatService.updateWhisperOutline(from, to);
+    public void updateWhisperOutline(@RequestParam("from") Integer from,
+                                     @RequestParam("to") Integer to,
+                                     @RequestParam(value = "deviceId", defaultValue = "legacy") String deviceId) {
+        chatService.updateWhisperOutline(from, to, deviceId);
     }
 }

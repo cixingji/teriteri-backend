@@ -21,6 +21,26 @@ public enum CommandType {
      */
     CHAT_WITHDRAW(102),
 
+    /**
+     * 聊天功能 接收方确认已送达
+     */
+    CHAT_DELIVERY_ACK(103),
+
+    /**
+     * 聊天功能 接收方确认已读
+     */
+    CHAT_READ_ACK(104),
+
+    /**
+     * 应用层心跳。浏览器 WebSocket API 无法主动发送 Ping 帧。
+     */
+    HEARTBEAT(105),
+
+    /**
+     * 分批拉取离线消息
+     */
+    OFFLINE_PULL(106),
+
     ERROR(-1),
     ;
 

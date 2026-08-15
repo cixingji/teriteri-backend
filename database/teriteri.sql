@@ -80,8 +80,14 @@ CREATE TABLE `chat_detailed` (
   `another_del` tinyint(4) NOT NULL DEFAULT '0' COMMENT '接受者是否删除',
   `withdraw` tinyint(4) NOT NULL DEFAULT '0' COMMENT '是否撤回',
   `time` datetime NOT NULL COMMENT '消息发送时间',
+  `client_message_id` varchar(64) DEFAULT NULL COMMENT '客户端消息幂等ID',
+  `delivered_at` datetime DEFAULT NULL COMMENT '送达时间',
+  `read_at` datetime DEFAULT NULL COMMENT '已读时间',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `id` (`id`)
+  UNIQUE KEY `id` (`id`),
+  UNIQUE KEY `uk_chat_sender_client_message` (`user_id`,`client_message_id`),
+  KEY `idx_chat_receiver_delivery` (`another_id`,`delivered_at`,`id`),
+  KEY `idx_chat_receiver_read` (`another_id`,`user_id`,`read_at`,`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=0 DEFAULT CHARSET=utf8mb4 COMMENT='聊天记录表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 

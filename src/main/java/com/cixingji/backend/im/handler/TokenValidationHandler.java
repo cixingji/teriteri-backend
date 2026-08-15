@@ -9,7 +9,6 @@ import com.cixingji.backend.pojo.entity.IMResponse;
 import com.cixingji.backend.pojo.entity.User;
 import com.cixingji.backend.service.auth.AuthSessionService;
 import com.cixingji.backend.utils.RedisUtil;
-import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
@@ -18,9 +17,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
-
-import java.util.HashSet;
-import java.util.Set;
 
 @Slf4j
 @Component
@@ -44,20 +40,19 @@ public class TokenValidationHandler extends SimpleChannelInboundHandler<TextWebS
     @Override
     public void channelRead0(ChannelHandlerContext ctx, TextWebSocketFrame tx) {
         Command command = JSON.parseObject(tx.text(), Command.class);
+        com.alibaba.fastjson2.JSONObject commandJson = JSON.parseObject(tx.text());
         String token = command.getContent();
 
         Integer uid = isValidToken(token);
         if (uid != null) {
             // 将uid绑到ctx上
             ctx.channel().attr(AttributeKey.valueOf("userId")).set(uid);
-            // 将channel存起来
-            if (IMServer.userChannel.get(uid) == null) {
-                Set<Channel> set = new HashSet<>();
-                set.add(ctx.channel());
-                IMServer.userChannel.put(uid, set);
-            } else {
-                IMServer.userChannel.get(uid).add(ctx.channel());
+            String deviceId = commandJson.getString("deviceId");
+            if (StringUtils.hasText(deviceId) && deviceId.matches("[A-Za-z0-9_-]{8,64}")) {
+                ctx.channel().attr(AttributeKey.valueOf("deviceId")).set(deviceId);
             }
+            // 将channel存起来
+            IMServer.register(uid, ctx.channel());
             redisUtil.addMember("login_member", uid);   // 将用户添加到在线用户集合
 //            System.out.println("该用户的全部连接状态：" + IMServer.userChannel.get(uid));
 //            System.out.println("当前在线人数：" + IMServer.userChannel.size());
@@ -67,6 +62,7 @@ public class TokenValidationHandler extends SimpleChannelInboundHandler<TextWebS
             tx.retain();
             // 将消息传递给下一个处理器
             ctx.fireChannelRead(tx);
+            ChatHandler.pushOffline(ctx, uid);
         } else {
             ctx.channel().writeAndFlush(IMResponse.error("登录已过期"));
             ctx.close();

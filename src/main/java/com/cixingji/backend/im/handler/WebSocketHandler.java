@@ -10,6 +10,8 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
+import io.netty.handler.timeout.IdleState;
+import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.util.AttributeKey;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,6 +46,22 @@ public class WebSocketHandler extends SimpleChannelInboundHandler<TextWebSocketF
                 case CHAT_WITHDRAW:
                     ChatHandler.withdraw(ctx, tx);
                     break;
+                case CHAT_DELIVERY_ACK:
+                    ChatHandler.acknowledgeDelivery(ctx, tx);
+                    break;
+                case CHAT_READ_ACK:
+                    ChatHandler.acknowledgeRead(ctx, tx);
+                    break;
+                case HEARTBEAT:
+                    refreshActiveChat(ctx, tx);
+                    ctx.channel().writeAndFlush(IMResponse.message("connection", java.util.Collections.singletonMap("type", "心跳")));
+                    break;
+                case OFFLINE_PULL:
+                    com.alibaba.fastjson2.JSONObject pull = JSON.parseObject(tx.text());
+                    ChatHandler.pushOffline(ctx,
+                            (Integer) ctx.channel().attr(AttributeKey.valueOf("userId")).get(),
+                            pull.getLongValue("afterId"));
+                    break;
                 default: ctx.channel().writeAndFlush(IMResponse.error("不支持的CODE " + command.getCode()));
             }
         } catch (Exception e) {
@@ -61,14 +79,17 @@ public class WebSocketHandler extends SimpleChannelInboundHandler<TextWebSocketF
     public void channelInactive(ChannelHandlerContext ctx) {
         // 当连接断开时，从 userChannel 中移除对应的 Channel
         Integer uid = (Integer) ctx.channel().attr(AttributeKey.valueOf("userId")).get();
+        if (uid == null) {
+            ctx.fireChannelInactive();
+            return;
+        }
         Set<Channel> userChannels = IMServer.userChannel.get(uid);
 //        System.out.println("移除channel前的集合状态：" + userChannels);
         if (userChannels != null) {
-            userChannels.remove(ctx.channel());
+            IMServer.unregister(uid, ctx.channel());
 //            System.out.println("移除channel后的集合状态：" + IMServer.userChannel.get(uid));
             // 用户离线操作
-            if (IMServer.userChannel.get(uid).size() == 0) {
-                IMServer.userChannel.remove(uid);
+            if (!IMServer.isOnline(uid)) {
 //                System.out.println("当前在线人数：" + IMServer.userChannel.size());
                 redisUtil.deleteKeysWithPrefix("whisper:" + uid + ":"); // 清除全部在聊天窗口的状态
                 redisUtil.delMember("login_member", uid);   // 从在线用户集合中移除
@@ -76,5 +97,25 @@ public class WebSocketHandler extends SimpleChannelInboundHandler<TextWebSocketF
         }
         // 继续处理后续逻辑
         ctx.fireChannelInactive();
+    }
+
+    private void refreshActiveChat(ChannelHandlerContext ctx, TextWebSocketFrame tx) {
+        com.alibaba.fastjson2.JSONObject json = JSON.parseObject(tx.text());
+        Integer uid = (Integer) ctx.channel().attr(AttributeKey.valueOf("userId")).get();
+        Integer chatId = json.getInteger("chatId");
+        String deviceId = (String) ctx.channel().attr(AttributeKey.valueOf("deviceId")).get();
+        if (uid != null && chatId != null && chatId > 0 && deviceId != null) {
+            redisUtil.addExMember("whisper:" + uid + ":" + chatId, deviceId, 75);
+        }
+    }
+
+    @Override
+    public void userEventTriggered(ChannelHandlerContext ctx, Object event) throws Exception {
+        if (event instanceof IdleStateEvent && ((IdleStateEvent) event).state() == IdleState.READER_IDLE) {
+            log.info("关闭超过75秒没有心跳的IM连接: {}", ctx.channel().id());
+            ctx.close();
+            return;
+        }
+        super.userEventTriggered(ctx, event);
     }
 }

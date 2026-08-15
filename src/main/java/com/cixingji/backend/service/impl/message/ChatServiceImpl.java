@@ -224,7 +224,15 @@ public class ChatServiceImpl implements ChatService {
     public boolean updateChat(Integer from, Integer to) {
         // 查询对方是否在窗口
         String key = "whisper:" + to + ":" + from;  // whisper:用户自己:聊天对象 这里的用户自己就是对方本人 聊天对象就是在发消息的我自己
-        boolean online = redisUtil.isExist(key);
+        boolean online;
+        try {
+            Long activeWindows = redisUtil.scard(key);
+            online = activeWindows != null && activeWindows > 0;
+        } catch (Exception legacyValue) {
+            // 兼容升级前以普通字符串保存的短期窗口在线标记。
+            online = redisUtil.isExist(key);
+        }
+        final boolean recipientOnline = online;
         try {
             /*
              既然我要发消息给对方 那么 to -> from 的 chat 表数据一定是存在的 因为发消息前一定创建了聊天
@@ -252,7 +260,7 @@ public class ChatServiceImpl implements ChatService {
                 queryWrapper2.eq("user_id", from).eq("another_id", to);
                 Chat chat2 = chatMapper.selectOne(queryWrapper2);
 
-                if (online) {
+                if (recipientOnline) {
                     // 如果对方在窗口就不更新未读
                     if (chat2 == null) {
                         // 如果对方没聊过天 就创建聊天
@@ -303,11 +311,18 @@ public class ChatServiceImpl implements ChatService {
      * @param to    收消息者UID（自己）
      */
     @Override
-    public void updateWhisperOnline(Integer from, Integer to) {
+    public void updateWhisperOnline(Integer from, Integer to, String deviceId) {
         try {
             // 更新为在线状态
             String key = "whisper:" + to + ":" + from;  // whisper:用户自己:聊天对象
-            redisUtil.setValue(key, true);
+            String normalizedDeviceId = normalizeDeviceId(deviceId);
+            try {
+                redisUtil.addExMember(key, normalizedDeviceId, 75);
+            } catch (Exception legacyValue) {
+                // 首次升级时可能还留有旧版字符串值，转换为按设备维护的Set。
+                redisUtil.delValue(key);
+                redisUtil.addExMember(key, normalizedDeviceId, 75);
+            }
 
             // 清除未读
             QueryWrapper<Chat> queryWrapper = new QueryWrapper<>();
@@ -346,13 +361,19 @@ public class ChatServiceImpl implements ChatService {
      * @param to    收消息者UID（自己）
      */
     @Override
-    public void updateWhisperOutline(Integer from, Integer to) {
+    public void updateWhisperOutline(Integer from, Integer to, String deviceId) {
         try {
             String key = "whisper:" + to + ":" + from;  // whisper:用户自己:聊天对象
-            // 删除key更新为离开状态
-            redisUtil.delValue(key);
+            redisUtil.delMember(key, normalizeDeviceId(deviceId));
         } catch (Exception e) {
             log.error("更新聊天窗口在线状态失败: " + e);
         }
+    }
+
+    private String normalizeDeviceId(String deviceId) {
+        if (deviceId == null || !deviceId.matches("[A-Za-z0-9_-]{8,64}")) {
+            return "legacy";
+        }
+        return deviceId;
     }
 }
