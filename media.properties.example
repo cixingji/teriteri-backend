@@ -1,0 +1,7 @@
+# Copy the values into application.yml or pass them as environment variables.
+# Use an absolute Windows path in production so media is outside the repository.
+media.root=E:/teriteri-data/media
+media.ffmpeg=E:/tools/ffmpeg/8.1.2/bin/ffmpeg.exe
+media.ffprobe=E:/tools/ffmpeg/8.1.2/bin/ffprobe.exe
+# cpu uses libx264. Set nvidia only after confirming h264_nvenc is available.
+media.encoder=cpu

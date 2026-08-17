@@ -2,6 +2,7 @@ package com.cixingji.backend.im;
 
 import com.cixingji.backend.im.handler.TokenValidationHandler;
 import com.cixingji.backend.im.handler.WebSocketHandler;
+import com.cixingji.backend.pojo.entity.IMResponse;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -43,6 +44,14 @@ public class IMServer {
     public static boolean isOnline(Integer uid) {
         Set<Channel> channels = userChannel.get(uid);
         return channels != null && channels.stream().anyMatch(Channel::isActive);
+    }
+
+    public static void broadcast(Integer uid, String type, Object payload) {
+        Set<Channel> channels = userChannel.get(uid);
+        if (channels == null) return;
+        for (Channel channel : channels) {
+            if (channel.isActive()) channel.writeAndFlush(IMResponse.message(type, payload));
+        }
     }
 
     public void start() throws InterruptedException {

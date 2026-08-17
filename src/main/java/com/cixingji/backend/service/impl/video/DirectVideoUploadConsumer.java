@@ -130,6 +130,7 @@ public class DirectVideoUploadConsumer {
                 url,
                 0,
                 now,
+                null,
                 null
         );
         videoMapper.insert(video);

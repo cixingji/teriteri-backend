@@ -31,4 +31,5 @@ public class Video {
     private Date uploadDate;
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm", timezone = "Asia/Shanghai")
     private Date deleteDate;
+    private Long assetId;
 }

@@ -37,10 +37,11 @@ public class VideoUploadController {
      */
     @PostMapping("/video/upload-chunk")
     public CustomResponse uploadChunk(@RequestParam("chunk") MultipartFile chunk,
-                                      @RequestParam("hash") String hash,
-                                      @RequestParam("index") Integer index) throws IOException {
+                                      @RequestParam("uploadId") String uploadId,
+                                      @RequestParam("index") Integer index,
+                                      @RequestParam("chunkHash") String chunkHash) throws IOException {
         try {
-            return videoUploadService.uploadChunk(chunk, hash, index);
+            return videoUploadService.uploadChunk(chunk, uploadId, index, chunkHash);
         } catch (Exception e) {
             e.printStackTrace();
             return new CustomResponse(500, "分片上传失败", null);
@@ -54,8 +55,9 @@ public class VideoUploadController {
      * @return
      */
     @GetMapping("/video/cancel-upload")
-    public CustomResponse cancelUpload(@RequestParam("hash") String hash) {
-        return videoUploadService.cancelUpload(hash);
+    public CustomResponse cancelUpload(@RequestParam(value = "uploadId", required = false) String uploadId,
+                                       @RequestParam(value = "hash", required = false) String hash) {
+        return videoUploadService.cancelUpload(uploadId == null ? hash : uploadId);
     }
 
     /**
@@ -82,13 +84,37 @@ public class VideoUploadController {
                                    @RequestParam("mcid") String mcid,
                                    @RequestParam("scid") String scid,
                                    @RequestParam("tags") String tags,
-                                   @RequestParam("descr") String descr) {
-        VideoUploadInfoDTO videoUploadInfoDTO = new VideoUploadInfoDTO(null, hash, title, type, auth, duration, mcid, scid, tags, descr, null);
+                                   @RequestParam("descr") String descr,
+                                   @RequestParam(value = "uploadId", required = false) String uploadId) {
+        VideoUploadInfoDTO videoUploadInfoDTO = new VideoUploadInfoDTO(null, hash, title, type, auth, duration, mcid, scid, tags, descr, null, uploadId);
         try {
             return videoUploadService.addVideo(cover, videoUploadInfoDTO);
         } catch (Exception e) {
             e.printStackTrace();
             return new CustomResponse(500, "封面上传失败", null);
         }
+    }
+
+    @GetMapping("/video/upload/tasks")
+    public CustomResponse myTasks() {
+        return videoUploadService.listMyTasks();
+    }
+
+    @PostMapping("/video/transcode/retry")
+    public CustomResponse retry(@RequestParam("taskId") Long taskId) {
+        return videoUploadService.retryTranscode(taskId);
+    }
+
+    @PostMapping("/video/upload/init")
+    public CustomResponse initUpload(@RequestParam("hash") String hash,
+                                     @RequestParam("fileName") String fileName,
+                                     @RequestParam("totalSize") Long totalSize,
+                                     @RequestParam("totalChunks") Integer totalChunks) {
+        return videoUploadService.initUpload(hash, fileName, totalSize, totalChunks);
+    }
+
+    @GetMapping("/video/upload/session")
+    public CustomResponse getUploadSession(@RequestParam("hash") String hash) {
+        return videoUploadService.getUploadSession(hash);
     }
 }

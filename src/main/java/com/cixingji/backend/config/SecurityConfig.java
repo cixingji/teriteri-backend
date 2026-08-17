@@ -89,6 +89,8 @@ public class SecurityConfig {
                                 "/video/random/visitor",
                                 "/video/cumulative/visitor",
                                 "/video/getone",
+                                "/media/covers/**",
+                                "/media/videos/**",
                                 "/ws/danmu/**",
                                 "/danmu-list/**",
                                 "/msg/chat/outline",

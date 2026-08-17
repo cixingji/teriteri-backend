@@ -2,12 +2,14 @@ package com.cixingji.backend.service.impl.video;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import com.cixingji.backend.im.IMServer;
 import com.cixingji.backend.mapper.VideoMapper;
 import com.cixingji.backend.mapper.VideoStatsMapper;
 import com.cixingji.backend.pojo.entity.CustomResponse;
 import com.cixingji.backend.pojo.entity.Video;
 import com.cixingji.backend.pojo.entity.VideoStats;
 import com.cixingji.backend.service.category.CategoryService;
+import com.cixingji.backend.service.media.MediaLifecycleService;
 import com.cixingji.backend.service.user.UserService;
 import com.cixingji.backend.service.utils.CurrentUser;
 import com.cixingji.backend.service.video.VideoService;
@@ -63,6 +65,9 @@ public class VideoServiceImpl implements VideoService {
 
     @Autowired
     private ESUtil esUtil;
+
+    @Autowired
+    private MediaLifecycleService mediaLifecycleService;
 
     @Autowired
     private SqlSessionFactory sqlSessionFactory;
@@ -386,6 +391,7 @@ public class VideoServiceImpl implements VideoService {
                     redisUtil.addMember("video_status:1", vid);     // 加入新状态
                     redisUtil.zset("user_video_upload:" + video.getUid(), video.getVid());
                     redisUtil.delValue("video:" + vid);     // 删除旧的视频信息
+                    notifyReviewResult(video, true);
                     return customResponse;
                 } else {
                     // 更新失败，处理错误情况
@@ -416,6 +422,7 @@ public class VideoServiceImpl implements VideoService {
                     redisUtil.addMember("video_status:2", vid);     // 加入新状态
                     redisUtil.zsetDelMember("user_video_upload:" + video.getUid(), video.getVid());
                     redisUtil.delValue("video:" + vid);     // 删除旧的视频信息
+                    notifyReviewResult(video, false);
                     return customResponse;
                 } else {
                     // 更新失败，处理错误情况
@@ -434,10 +441,6 @@ public class VideoServiceImpl implements VideoService {
                 return customResponse;
             }
             if (Objects.equals(userId, video.getUid()) || currentUser.isAdmin()) {
-                String videoUrl = video.getVideoUrl();
-                String videoPrefix = videoUrl.split("aliyuncs.com/")[1];  // OSS视频文件名
-                String coverUrl = video.getCoverUrl();
-                String coverPrefix = coverUrl.split("aliyuncs.com/")[1];  // OSS封面文件名
                 Integer lastStatus = video.getStatus();
                 UpdateWrapper<Video> updateWrapper = new UpdateWrapper<>();
                 updateWrapper.eq("vid", vid).set("status", 3).set("delete_date", new Date());     // 更新视频状态已删除
@@ -449,9 +452,11 @@ public class VideoServiceImpl implements VideoService {
                     redisUtil.delValue("video:" + vid);     // 删除旧的视频信息
                     redisUtil.delValue("danmu_idset:" + vid);   // 删除该视频的弹幕
                     redisUtil.zsetDelMember("user_video_upload:" + video.getUid(), video.getVid());
-                    // 搞个异步线程去删除OSS的源文件
-                    CompletableFuture.runAsync(() -> ossUtil.deleteFiles(videoPrefix), taskExecutor);
-                    CompletableFuture.runAsync(() -> ossUtil.deleteFiles(coverPrefix), taskExecutor);
+                    if (video.getAssetId() != null) {
+                        mediaLifecycleService.release(video.getAssetId());
+                    } else {
+                        deleteLegacyOssFiles(video);
+                    }
                     // 批量删除该视频下的全部评论缓存
                     CompletableFuture.runAsync(() -> {
                         Set<Object> set = redisUtil.zReverange("comment_video:" + vid, 0, -1);
@@ -476,5 +481,28 @@ public class VideoServiceImpl implements VideoService {
         customResponse.setCode(500);
         customResponse.setMessage("更新状态失败");
         return customResponse;
+    }
+
+    private void deleteLegacyOssFiles(Video video) {
+        String videoUrl = video.getVideoUrl();
+        String coverUrl = video.getCoverUrl();
+        if (videoUrl != null && videoUrl.contains("aliyuncs.com/")) {
+            String videoPrefix = videoUrl.split("aliyuncs.com/", 2)[1];
+            CompletableFuture.runAsync(() -> ossUtil.deleteFiles(videoPrefix), taskExecutor);
+        }
+        if (coverUrl != null && coverUrl.contains("aliyuncs.com/")) {
+            String coverPrefix = coverUrl.split("aliyuncs.com/", 2)[1];
+            CompletableFuture.runAsync(() -> ossUtil.deleteFiles(coverPrefix), taskExecutor);
+        }
+    }
+
+    private void notifyReviewResult(Video video, boolean approved) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("type", "接收");
+        payload.put("event", approved ? "审核通过" : "审核未通过");
+        payload.put("message", "《" + video.getTitle() + "》" + (approved ? "已发布" : "未通过审核"));
+        payload.put("videoId", video.getVid());
+        payload.put("progress", 100);
+        IMServer.broadcast(video.getUid(), "system", payload);
     }
 }

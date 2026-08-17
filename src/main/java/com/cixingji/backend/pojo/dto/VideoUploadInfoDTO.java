@@ -19,4 +19,5 @@ public class VideoUploadInfoDTO {
     private String tags;
     private String descr;
     private String coverUrl;
+    private String uploadId;
 }

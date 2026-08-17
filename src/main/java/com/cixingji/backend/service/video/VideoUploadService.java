@@ -8,6 +8,9 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 
 public interface VideoUploadService {
+    CustomResponse initUpload(String hash, String fileName, Long totalSize, Integer totalChunks);
+
+    CustomResponse getUploadSession(String hash);
     /**
      * 获取视频下一个还没上传的分片序号
      * @param hash 视频的hash值
@@ -23,7 +26,7 @@ public interface VideoUploadService {
      * @return  CustomResponse对象
      * @throws IOException
      */
-    CustomResponse uploadChunk(MultipartFile chunk, String hash, Integer index) throws IOException;
+    CustomResponse uploadChunk(MultipartFile chunk, String sessionId, Integer index, String chunkHash) throws IOException;
 
     /**
      * 取消上传并且删除该视频的分片文件
@@ -40,4 +43,8 @@ public interface VideoUploadService {
      * @throws JsonProcessingException
      */
     CustomResponse addVideo(MultipartFile cover, VideoUploadInfoDTO videoUploadInfoDTO) throws IOException;
+
+    CustomResponse listMyTasks();
+
+    CustomResponse retryTranscode(Long taskId);
 }
