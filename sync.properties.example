@@ -1,0 +1,16 @@
+# Enable after applying database/canal_search_sync.sql and starting MySQL binlog, Canal and Kafka.
+sync.enabled=true
+sync.coalesce-millis=1000
+sync.max-attempts=5
+sync.canal.enabled=true
+sync.canal.host=127.0.0.1
+sync.canal.port=11111
+sync.canal.destination=example
+sync.canal.subscription=.*\\.(video|video_stats|user|category)
+sync.kafka.enabled=true
+sync.kafka.topic=video-index-sync
+sync.kafka.dead-letter-topic=video-index-sync-dlt
+spring.kafka.bootstrap-servers=127.0.0.1:9092
+
+# Disable application-level dual writes after Canal sync is verified in production.
+search.index.direct-write-enabled=false

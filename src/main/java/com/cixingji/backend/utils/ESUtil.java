@@ -41,7 +41,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.IntConsumer;
 
 @Component
 @Slf4j
@@ -64,6 +68,9 @@ public class ESUtil {
     @Value("${search.index.bootstrap-enabled:true}")
     private boolean bootstrapEnabled;
 
+    @Value("${search.index.direct-write-enabled:true}")
+    private boolean directWriteEnabled;
+
     public ESUtil(ElasticsearchClient client,
                   VideoMapper videoMapper,
                   UserMapper userMapper,
@@ -80,7 +87,7 @@ public class ESUtil {
      * Video writes are coalesced and flushed asynchronously. Indexing by vid makes every write idempotent.
      */
     public void addVideo(Video video) {
-        if (video != null && video.getVid() != null) {
+        if (directWriteEnabled && video != null && video.getVid() != null) {
             pendingVideoOperations.put(video.getVid(), IndexOperation.UPSERT);
         }
     }
@@ -90,18 +97,19 @@ public class ESUtil {
     }
 
     public void updateVideoById(Integer vid) {
-        if (vid != null) {
+        if (directWriteEnabled && vid != null) {
             pendingVideoOperations.put(vid, IndexOperation.UPSERT);
         }
     }
 
     public void deleteVideo(Integer vid) {
-        if (vid != null) {
+        if (directWriteEnabled && vid != null) {
             pendingVideoOperations.put(vid, IndexOperation.DELETE);
         }
     }
 
     public void updateVideosByUser(Integer uid) {
+        if (!directWriteEnabled) return;
         if (uid == null) return;
         List<Video> videos = videoMapper.selectList(new QueryWrapper<Video>()
                 .select("vid").eq("uid", uid).ne("status", 3));
@@ -164,6 +172,79 @@ public class ESUtil {
         } catch (IOException e) {
             throw new IllegalStateException("Could not rebuild the video search index", e);
         }
+    }
+
+    public void synchronizeVideoNow(Integer vid) throws IOException {
+        if (vid != null) upsertVideoNow(vid);
+    }
+
+    public void synchronizeVideosByUserNow(Integer uid) throws IOException {
+        if (uid == null) return;
+        List<Video> videos = videoMapper.selectList(new QueryWrapper<Video>().select("vid").eq("uid", uid));
+        for (Video video : videos) upsertVideoNow(video.getVid());
+    }
+
+    public void synchronizeVideosByCategoryNow(String mcId, String scId) throws IOException {
+        if (mcId == null || scId == null) return;
+        List<Video> videos = videoMapper.selectList(new QueryWrapper<Video>().select("vid")
+                .eq("mc_id", mcId).eq("sc_id", scId));
+        for (Video video : videos) upsertVideoNow(video.getVid());
+    }
+
+    public int rebuildVideoSearchIndexNow(IntConsumer progressCallback) throws IOException {
+        synchronized (indexInitializationMonitor) {
+            videoIndexReady = false;
+            if (client.indices().exists(e -> e.index(VIDEO_SEARCH_INDEX)).value()) {
+                client.indices().delete(d -> d.index(VIDEO_SEARCH_INDEX));
+            }
+            ensureVideoSearchIndex();
+        }
+        List<Video> videos = videoMapper.selectList(new QueryWrapper<Video>().select("vid").eq("status", 1).orderByAsc("vid"));
+        int processed = 0;
+        for (Video video : videos) {
+            upsertVideoNow(video.getVid());
+            processed++;
+            if (progressCallback != null) progressCallback.accept(processed);
+        }
+        return videos.size();
+    }
+
+    public Map<String, Integer> reconcileVideoSearchIndex(boolean repair) throws IOException {
+        ensureVideoSearchIndex();
+        List<Video> published = videoMapper.selectList(new QueryWrapper<Video>().select("vid").eq("status", 1));
+        Set<Integer> mysqlIds = new HashSet<>();
+        for (Video video : published) mysqlIds.add(video.getVid());
+        SearchResponse<ESVideo> indexed = client.search(new SearchRequest.Builder().index(VIDEO_SEARCH_INDEX)
+                .query(q -> q.matchAll(m -> m)).size(10000).build(), ESVideo.class);
+        Set<Integer> indexIds = new HashSet<>();
+        Map<Integer, ESVideo> sources = new HashMap<>();
+        for (Hit<ESVideo> hit : indexed.hits().hits()) {
+            try {
+                Integer id = Integer.valueOf(hit.id());
+                indexIds.add(id);
+                if (hit.source() != null) sources.put(id, hit.source());
+            } catch (NumberFormatException ignored) { }
+        }
+        Set<Integer> missing = new HashSet<>(mysqlIds); missing.removeAll(indexIds);
+        Set<Integer> extra = new HashSet<>(indexIds); extra.removeAll(mysqlIds);
+        Set<Integer> stale = new HashSet<>();
+        for (Integer id : mysqlIds) {
+            if (missing.contains(id)) continue;
+            Video video = videoMapper.selectById(id);
+            ESVideo expected = buildDocument(video);
+            if (!expected.equals(sources.get(id))) stale.add(id);
+        }
+        int repaired = 0;
+        if (repair) {
+            for (Integer id : missing) { upsertVideoNow(id); repaired++; }
+            for (Integer id : stale) { upsertVideoNow(id); repaired++; }
+            for (Integer id : extra) { deleteVideoNow(id); repaired++; }
+        }
+        Map<String, Integer> result = new LinkedHashMap<>();
+        result.put("mysql", mysqlIds.size()); result.put("elasticsearch", indexIds.size());
+        result.put("missing", missing.size()); result.put("stale", stale.size());
+        result.put("extra", extra.size()); result.put("repaired", repaired);
+        return result;
     }
 
     public VideoSearchPage searchVideos(VideoSearchCriteria criteria) {
@@ -285,15 +366,20 @@ public class ESUtil {
     private void upsertVideoNow(Integer vid) throws IOException {
         ensureVideoSearchIndex();
         Video video = videoMapper.selectById(vid);
-        if (video == null || Integer.valueOf(3).equals(video.getStatus())) {
+        if (video == null || !Integer.valueOf(1).equals(video.getStatus())) {
             deleteVideoNow(vid);
             return;
         }
+        ESVideo document = buildDocument(video);
+        client.index(i -> i.index(VIDEO_SEARCH_INDEX).id(String.valueOf(vid)).document(document));
+    }
+
+    private ESVideo buildDocument(Video video) {
         User user = userMapper.selectById(video.getUid());
         Category category = categoryMapper.selectOne(new QueryWrapper<Category>()
                 .eq("mc_id", video.getMcId()).eq("sc_id", video.getScId()));
-        VideoStats stats = videoStatsMapper.selectById(vid);
-        ESVideo document = new ESVideo(
+        VideoStats stats = videoStatsMapper.selectById(video.getVid());
+        return new ESVideo(
                 video.getVid(), video.getUid(), safe(video.getTitle()), safe(video.getDescr()), safe(video.getTags()),
                 safe(video.getMcId()), safe(video.getScId()),
                 category == null ? "" : safe(category.getMcName()),
@@ -302,7 +388,6 @@ public class ESUtil {
                 video.getStatus(), video.getUploadDate() == null ? 0L : video.getUploadDate().getTime(),
                 stats == null || stats.getPlay() == null ? 0 : stats.getPlay(),
                 stats == null || stats.getGood() == null ? 0 : stats.getGood());
-        client.index(i -> i.index(VIDEO_SEARCH_INDEX).id(String.valueOf(vid)).document(document));
     }
 
     private void deleteVideoNow(Integer vid) throws IOException {

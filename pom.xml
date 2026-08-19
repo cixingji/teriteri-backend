@@ -264,13 +264,12 @@
         <dependency>
             <groupId>com.alibaba.otter</groupId>
             <artifactId>canal.protocol</artifactId>
-            <version>1.1.6</version>
+            <version>1.1.8</version>
         </dependency>
-        <!--canal同步-->
         <dependency>
-            <groupId>top.javatool</groupId>
-            <artifactId>canal-spring-boot-starter</artifactId>
-            <version>1.2.1-RELEASE</version>
+            <groupId>javax.persistence</groupId>
+            <artifactId>javax.persistence-api</artifactId>
+            <version>2.2</version>
         </dependency>
         <!--Kakfa导入-->
         <dependency>
