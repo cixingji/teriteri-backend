@@ -9,6 +9,7 @@ import com.cixingji.backend.pojo.entity.IMResponse;
 import com.cixingji.backend.pojo.entity.UserVideo;
 import com.cixingji.backend.pojo.entity.Video;
 import com.cixingji.backend.service.message.MsgUnreadService;
+import com.cixingji.backend.service.traffic.TrafficEventService;
 import com.cixingji.backend.service.video.UserVideoService;
 import com.cixingji.backend.service.video.VideoStatsService;
 import com.cixingji.backend.utils.RedisUtil;
@@ -40,6 +41,9 @@ public class UserVideoServiceImpl implements UserVideoService {
     private RedisUtil redisUtil;
 
     @Autowired
+    private TrafficEventService trafficEventService;
+
+    @Autowired
     @Qualifier("taskExecutor")
     private Executor taskExecutor;
 
@@ -69,7 +73,7 @@ public class UserVideoServiceImpl implements UserVideoService {
         // 异步线程更新video表和redis
         CompletableFuture.runAsync(() -> {
             redisUtil.zset("user_video_history:" + uid, vid);   // 添加到/更新观看历史记录
-            videoStatsService.updateStats(vid, "play", true, 1);
+            trafficEventService.publishPlay(vid, "USER", String.valueOf(uid));
         }, taskExecutor);
         return userVideo;
     }

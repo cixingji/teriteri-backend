@@ -132,6 +132,10 @@ npm run serve
 
 ### **最后注意一下版权问题**
 
+### Kafka 流量治理
+
+播放统计、异步业务日志、Guava 分级限流和死信重放的 Windows 配置见 [docs/kafka-traffic.md](docs/kafka-traffic.md)。Kafka 默认关闭，未安装 Kafka 时会回退到同步播放计数。
+
 
 
 ## 界面展示

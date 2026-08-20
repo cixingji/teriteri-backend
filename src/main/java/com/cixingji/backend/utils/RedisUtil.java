@@ -462,6 +462,14 @@ public class RedisUtil {
     }
 
     /**
+     * 仅在 key 不存在时写入，并设置过期时间。用于跨实例的短周期业务去重。
+     */
+    public boolean setIfAbsent(String key, Object value, long time, TimeUnit timeUnit) {
+        Boolean result = redisTemplate.opsForValue().setIfAbsent(key, value, time, timeUnit);
+        return Boolean.TRUE.equals(result);
+    }
+
+    /**
      * 使用默认有效期存储实体类
      * @param key
      * @param value

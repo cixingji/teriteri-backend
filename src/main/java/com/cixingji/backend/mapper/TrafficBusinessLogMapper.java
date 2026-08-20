@@ -1,0 +1,8 @@
+package com.cixingji.backend.mapper;
+
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.cixingji.backend.pojo.entity.TrafficBusinessLog;
+import org.apache.ibatis.annotations.Mapper;
+
+@Mapper
+public interface TrafficBusinessLogMapper extends BaseMapper<TrafficBusinessLog> { }

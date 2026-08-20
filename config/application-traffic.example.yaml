@@ -1,0 +1,34 @@
+spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:127.0.0.1:9092}
+    producer:
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: true
+        linger.ms: 5
+        batch.size: 65536
+        compression.type: lz4
+    consumer:
+      auto-offset-reset: earliest
+      max-poll-records: 500
+
+traffic:
+  enabled: true
+  play-deduplicate-seconds: 1800
+  aggregate-delay-ms: 2000
+  aggregate-batch-size: 5000
+  max-attempts: 5
+  kafka:
+    enabled: false
+    play-topic: teriteri.video.play.v1
+    business-log-topic: teriteri.business.log.v1
+    consumer-concurrency: 3
+  rate-limit:
+    enabled: true
+    play-permits-per-second: 1000.0
+    like-permits-per-second: 500.0
+    comment-permits-per-second: 200.0
+    actor-play-permits-per-second: 5.0
+    actor-like-permits-per-second: 10.0
+    actor-comment-permits-per-second: 2.0

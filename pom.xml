@@ -119,6 +119,13 @@
             <version>3.13.0</version>
         </dependency>
 
+        <!-- 单机分级令牌桶与限流器缓存 -->
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>32.1.3-jre</version>
+        </dependency>
+
         <!--文件上传相关-->
         <dependency>
             <groupId>commons-fileupload</groupId>
